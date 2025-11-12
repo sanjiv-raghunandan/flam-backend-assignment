@@ -22,14 +22,18 @@
 queuectl enqueue "sleep 5 && echo 'Job Done'"
 ```
 
-### Start Workers
+### Start and Stop Workers
 ```bash
+# Start 3 workers in the background
 queuectl worker start --count 3
+
+# Stop all running workers
+queuectl worker stop
 ```
 
 ### List Jobs
 ```bash
-queuectl list --state pending
+queuectl list --state <state_name>
 ```
 
 ### Check Status
@@ -50,6 +54,18 @@ queuectl dlq retry <job_id>
 ```bash
 # Set max retries to 5
 queuectl config set max-retries 5
+
+# Set backoff base (default is 2)
+queuectl config set backoff-base 3
+```
+
+### View Job Output
+```bash
+# First, find the ID of a completed job
+queuectl list --state completed
+
+# Then, view the log file (replace <job_id> with the actual ID)
+cat ~/.queuectl/logs/<job_id>.log
 ```
 
 ## Architecture Overview
@@ -65,7 +81,15 @@ queuectl config set max-retries 5
 Job data is stored in a SQLite database located at `~/.queuectl.db`. This ensures that jobs persist across restarts.
 
 ### Worker Logic
-Workers poll the database for pending jobs. When a job is found, it's locked (moved to `processing` state) and executed. If the job fails, it's retried with exponential backoff. After exhausting all retries, it's moved to the DLQ.
+Workers poll the database for pending jobs. When a job is found, it's locked (moved to `processing` state) using an atomic transaction to prevent race conditions. If the job fails, it's retried with exponential backoff (configurable via `backoff-base`). After exhausting all retries, it's moved to the DLQ.
+
+### Job Logging
+The output (`stdout` and `stderr`) of each job is logged to a file in the `~/.queuectl/logs/` directory. Each job has its own log file, named after the job's ID (e.g., `<job_id>.log`). This allows you to inspect the output of completed or failed jobs.
+
+### Retry & Backoff Configuration
+- **max-retries**: Configurable via `queuectl config set max-retries <value>` (default: 3)
+- **backoff-base**: Configurable via `queuectl config set backoff-base <value>` (default: 2)
+- Retry delay formula: `delay = backoff_base ^ attempts` seconds
 
 ## Assumptions & Trade-offs
 -   **Process Management**: The current implementation uses `multiprocessing` for worker management. A more robust solution for a production environment might involve a more sophisticated process manager like `systemd` or a container orchestration platform.

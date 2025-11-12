@@ -27,13 +27,11 @@ def worker():
 def start(count):
     """Start one or more workers."""
     worker_manager.start_workers(count)
-    click.echo(f"Started {count} worker(s)")
 
 @worker.command()
 def stop():
     """Stop running workers gracefully."""
     worker_manager.stop_workers()
-    click.echo("Stopping workers")
 
 @cli.command()
 def status():
